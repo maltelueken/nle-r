@@ -94,9 +94,10 @@ adapter = (
     bf.Adapter()
     .to_array()
     .convert_dtype("float64", "float32")
-    .broadcast(par_names, to="x", expand=1)
-    .concatenate("x", into="inference_variables")
+    .expand_dims(par_names, axis=1)
+    .broadcast(par_names, to="x")
     .concatenate(par_names, into="inference_conditions")
+    .rename("x", "inference_variables")
     .keep(
         ["inference_variables", "inference_conditions"]
     )
@@ -104,10 +105,15 @@ adapter = (
 
 inference_network = bf.networks.CouplingFlow()
 
-approximator = bf.ContinuousApproximator(
-   inference_network=inference_network,
-   adapter=adapter,
-)
+checkpoint_path = "checkpoints/model.keras"
+
+if (os.path.exists(checkpoint_path)):
+    approximator = keras.saving.load_model(checkpoint_path)
+else:
+    approximator = bf.ContinuousApproximator(
+        inference_network=inference_network,
+        adapter=adapter
+    )
 
 epochs = 1
 num_batches = 500
@@ -122,7 +128,7 @@ history = approximator.fit(
     batch_size=batch_size,
     simulator=simulator,
     callbacks=[keras.callbacks.ModelCheckpoint(
-        filepath="checkpoints/model.keras",
+        filepath=checkpoint_path,
         save_weights_only=False,
         monitor="loss",
         mode="min",
